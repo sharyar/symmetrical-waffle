@@ -7,7 +7,7 @@
 # Parsing -> recognizing a phrase in a stream of tokens -> Parser
 # Expr -> Does both parsing and interpreting.
 
-INTEGER, PLUS, MINUS, MUL, DIV, EOF = "INTEGER", "PLUS", "MINUS", "MUL", "DIV", "EOF"
+INTEGER, PLUS, MINUS, EOF = "INTEGER", "PLUS", "MINUS", "EOF"
 
 
 class Token(object):
@@ -44,8 +44,11 @@ class Interpreter(object):
         self.current_token = None
         self.current_char = self.text[self.pos]
 
+    ######################################################
+    # Lexer Code                                         #
+    ######################################################
     def error(self):
-        raise Exception("Error parsing input")
+        raise Exception("Invalid syntax")
 
     def advance(self):
         """Advance the 'pos' pointer and se the current_char variable"""
@@ -92,56 +95,43 @@ class Interpreter(object):
                 self.advance()
                 return Token(MINUS, "-")
 
-            if self.current_char == "*":
-                self.advance()
-                return Token(MUL, "*")
-
-            if self.current_char == "/":
-                self.advance()
-                return Token(DIV, "/")
-
             self.error()
 
         return Token(EOF, None)
 
     def eat(self, token_type):
+        # Compare the current token type with passed token
+        # type and if the match then "eat" the current token 
+        # and assign the next token to the self.current token 
         if self.current_token.type == token_type:
             self.current_token = self.get_next_token()
         else:
             self.error()
+            
+    def term(self):
+        """Return an integer token value"""
+        token = self.current_token # we keep a reference to the current token
+        self.eat(INTEGER) # we move the self.current_token pointer to the next token.
+        return token.value # we use the original reference to retrieve the value of the integer node. 
+
 
     def expr(self):
+        """Artihmetic expression parser/interpreter"""
         # sets current token to the first token from the input
         self.current_token = self.get_next_token()
 
-        # we expect first token to be an integer
-        left = self.current_token
-        self.eat(INTEGER)
-
-        # we expect the current token to be a + or -
-        op = self.current_token
-        if op.type == PLUS:
-            self.eat(PLUS)
-        elif op.type == MINUS:
-            self.eat(MINUS)
-        elif op.type == MUL:
-            self.eat(MUL)
-        elif op.type == DIV:
-            self.eat(DIV)
-        # we expect the current token to be a integer
-        right = self.current_token
-        self.eat(INTEGER)
-        # after the above call, the self.current_token is set to EOF token
-
-        if op.type == PLUS:
-            result = left.value + right.value
-        elif op.type == MINUS:
-            result = left.value - right.value
-        elif op.type == MUL:
-            result = left.value * right.value
-        else:
-            result = left.value / right.value
+        result = self.term()
+        while self.current_token.type in (PLUS, MINUS):
+            token = self.current_token
+            if token.type == 'PLUS':
+                self.eat(PLUS)
+                result += self.term()
+            elif token.type == 'MINUS':
+                self.eat(MINUS)
+                result -= self.term()  
+       
         return result
+
 
 
 def main():
