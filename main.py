@@ -7,7 +7,25 @@
 # Parsing -> recognizing a phrase in a stream of tokens -> Parser
 # Expr -> Does both parsing and interpreting.
 
-INTEGER, PLUS, MINUS, EOF = "INTEGER", "PLUS", "MINUS", "EOF"
+
+# Here are the guidelines that we will use to convert the grammar to source code. By following them, you can literally
+# translate the grammar to a working parser:
+
+# Each rule, R, defined in the grammar, becomes a method with the same name, and references to that rule become a method call: R().
+# The body of the method follows the flow of the body of the rule using the very same guidelines.
+# Alternatives (a1 | a2 | aN) become an if-elif-else statement
+# An optional grouping (…)* becomes a while statement that can loop over zero or more times
+# Each token reference T becomes a call to the method eat: eat(T). The way the eat method works is that it consumes the token T if it matches the
+# current lookahead token, then it gets a new token from the lexer and assigns that token to the current_token internal variable.
+
+INTEGER, PLUS, MINUS, MULTIPLY, DIVIDE, EOF = (
+    "INTEGER",
+    "PLUS",
+    "MINUS",
+    "MULTIPLY",
+    "DIVIDE",
+    "EOF",
+)
 
 
 class Token(object):
@@ -34,7 +52,7 @@ class Token(object):
         return self.__str__()
 
 
-class Interpreter(object):
+class Lexer(object):
     def __init__(self, text):
         # string input, e.g. "3+5"
         self.text = text
@@ -44,11 +62,8 @@ class Interpreter(object):
         self.current_token = None
         self.current_char = self.text[self.pos]
 
-    ######################################################
-    # Lexer Code                                         #
-    ######################################################
     def error(self):
-        raise Exception("Invalid syntax")
+        raise Exception("Invalid character")
 
     def advance(self):
         """Advance the 'pos' pointer and se the current_char variable"""
@@ -71,7 +86,7 @@ class Interpreter(object):
         return int(result)
 
     def get_next_token(self):
-        """Lexical Analyzer
+        """Lexical Analyzer aka tokenizer/scanner
 
         Breaks up a sentence into tokens, one token at a time.
 
@@ -95,43 +110,68 @@ class Interpreter(object):
                 self.advance()
                 return Token(MINUS, "-")
 
+            if self.current_char == "/":
+                self.advance()
+                return Token(DIVIDE, "/")
+
+            if self.current_char == "*":
+                self.advance()
+                return Token(MULTIPLY, "*")
+
             self.error()
 
         return Token(EOF, None)
 
+
+class Interpreter(object):
+    def __init__(self, lexer):
+        self.lexer = lexer
+        # set current token to the first token taken from the input
+        self.current_token = self.lexer.get_next_token()
+
+    def error(self):
+        raise Exception("Invalid syntax")
+
     def eat(self, token_type):
         # Compare the current token type with passed token
-        # type and if the match then "eat" the current token 
-        # and assign the next token to the self.current token 
+        # type and if the match then "eat" the current token
+        # and assign the next token to the self.current token
         if self.current_token.type == token_type:
-            self.current_token = self.get_next_token()
+            self.current_token = self.lexer.get_next_token()
         else:
             self.error()
-            
-    def term(self):
-        """Return an integer token value"""
-        token = self.current_token # we keep a reference to the current token
-        self.eat(INTEGER) # we move the self.current_token pointer to the next token.
-        return token.value # we use the original reference to retrieve the value of the integer node. 
 
+    def factor(self):
+        """Return an integer token value"""
+        token = self.current_token  # we keep a reference to the current token
+        self.eat(INTEGER)  # we move the self.current_token pointer to the next token.
+        return (
+            token.value
+        )  # we use the original reference to retrieve the value of the integer node.
 
     def expr(self):
         """Artihmetic expression parser/interpreter"""
         # sets current token to the first token from the input
-        self.current_token = self.get_next_token()
 
-        result = self.term()
-        while self.current_token.type in (PLUS, MINUS):
+        result = self.factor()
+        while self.current_token.type in (PLUS, MINUS, MULTIPLY, DIVIDE):
             token = self.current_token
-            if token.type == 'PLUS':
+            if token.type == "PLUS":
                 self.eat(PLUS)
-                result += self.term()
-            elif token.type == 'MINUS':
-                self.eat(MINUS)
-                result -= self.term()  
-       
-        return result
+                result += self.factor()
 
+            elif token.type == "MINUS":
+                self.eat(MINUS)
+                result -= self.factor()
+
+            elif token.type == "MULTIPLY":
+                self.eat(MULTIPLY)
+                result *= self.factor()
+
+            elif token.type == "DIVIDE":
+                self.eat(DIVIDE)
+                result /= self.factor()
+        return result
 
 
 def main():
@@ -142,7 +182,8 @@ def main():
             break
         if not _text:
             continue
-        interpreter = Interpreter(_text)
+        lexer = Lexer(_text)
+        interpreter = Interpreter(lexer)
         result = interpreter.expr()
         print(result)
 
