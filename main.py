@@ -18,12 +18,14 @@
 # Each token reference T becomes a call to the method eat: eat(T). The way the eat method works is that it consumes the token T if it matches the
 # current lookahead token, then it gets a new token from the lexer and assigns that token to the current_token internal variable.
 
-INTEGER, PLUS, MINUS, MULTIPLY, DIVIDE, EOF = (
+INTEGER, PLUS, MINUS, MUL, DIV, LPAREN, RPAREN, EOF = (
     "INTEGER",
     "PLUS",
     "MINUS",
-    "MULTIPLY",
-    "DIVIDE",
+    "MUL",
+    "DIV",
+    "(",
+    ")",
     "EOF",
 )
 
@@ -112,11 +114,19 @@ class Lexer(object):
 
             if self.current_char == "/":
                 self.advance()
-                return Token(DIVIDE, "/")
+                return Token(DIV, "/")
 
             if self.current_char == "*":
                 self.advance()
-                return Token(MULTIPLY, "*")
+                return Token(MUL, "*")
+
+            if self.current_char == "(":
+                self.advance()
+                return Token(LPAREN, "(")
+
+            if self.current_char == ")":
+                self.advance()
+                return Token(RPAREN, ")")
 
             self.error()
 
@@ -142,35 +152,54 @@ class Interpreter(object):
             self.error()
 
     def factor(self):
-        """Return an integer token value"""
+        """factor: INTEGER|LPAREN expr RPAREN"""
         token = self.current_token  # we keep a reference to the current token
-        self.eat(INTEGER)  # we move the self.current_token pointer to the next token.
-        return (
-            token.value
-        )  # we use the original reference to retrieve the value of the integer node.
+        if token.type == INTEGER:
+            self.eat(INTEGER)
+            return token.value
+        elif token.type == LPAREN:
+            self.eat(LPAREN)
+            result = self.expr()
+            self.eat(RPAREN)
+            return result
+
+    def term(self):
+        """term: factor((MUL | DIV) factor) *"""
+        result = self.factor()
+
+        while self.current_token.type in (MUL, DIV):
+            token = self.current_token
+            if token.type == MUL:
+                self.eat(MUL)
+                result = result * self.factor()
+            elif token.type == DIV:
+                self.eat(DIV)
+                result = result / self.factor()
+
+        return result
 
     def expr(self):
-        """Artihmetic expression parser/interpreter"""
-        # sets current token to the first token from the input
+        """
+        Arithmetic expression parser/ interpreter
 
-        result = self.factor()
-        while self.current_token.type in (PLUS, MINUS, MULTIPLY, DIVIDE):
+        calc> 87 + 3 * (10/ 12 (3+1))
+
+        expr: term((PLUS | MINUS) term)*
+        term: factor((MUL | DIV) factor) *
+        factor: INTEGER | LPAREN expr RPAREN
+        """
+
+        result = self.term()
+
+        while self.current_token.type in (PLUS, MINUS):
             token = self.current_token
-            if token.type == "PLUS":
+            if token.type == PLUS:
                 self.eat(PLUS)
-                result += self.factor()
-
-            elif token.type == "MINUS":
+                result = result + self.term()
+            elif token.type == MINUS:
                 self.eat(MINUS)
-                result -= self.factor()
+                result = result - self.term()
 
-            elif token.type == "MULTIPLY":
-                self.eat(MULTIPLY)
-                result *= self.factor()
-
-            elif token.type == "DIVIDE":
-                self.eat(DIVIDE)
-                result /= self.factor()
         return result
 
 
